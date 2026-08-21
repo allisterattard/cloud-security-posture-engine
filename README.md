@@ -151,11 +151,11 @@ All scanners implement a uniform contract returning standardized finding diction
 ## Supported Scanners
 - [x] Network Security Groups: Inbound internet access (0.0.0.0/0 or *) on management ports (RDP 3389, SSH 22), overly broad subnet rules.
 - [x] Storage Accounts: Public blob access enabled, missing "Require Secure Transfer" (HTTPS), legacy TLS version (<1.2), soft-delete disabled, missing Private Endpoints.
-- [ ] Key Vaults: Soft-delete / purge protection disabled, public network access enabled, using Vault Access Policies instead of Azure RBAC, unrotated secrets (In Progress).
+- [x] Key Vaults: Soft-delete / purge protection disabled, public network access enabled, using Vault Access Policies instead of Azure RBAC, unrotated secrets.
+- [ ] Azure Cache for Redis: Non-TLS port (6379) enabled, exposed to the public internet without Private Endpoints or VNet integration, weak access keys (In Progress).
 - [ ] Azure SQL (MSSQL PaaS): Public IP exposure, missing Azure AD (Entra) authentication-only mode, Auditing / Defender for SQL turned off, unencrypted data in transit (enforce TLS) (Planned).
 - [ ] Azure Firewall / Load Balancers: Missing WAF integration on App Gateways/Front Door, standard public LBs exposing).ng backends without outbound NAT rules or NSG filtering (Planned).
 - [ ] Azure Kubernetes Service (AKS): Public API server endpoint exposed, missing Entra ID RBAC integration, non-system pods running as root, missing Azure Policy/OPA constraint enforcement (Planned).
-- [ ] Azure Cache for Redis: Non-TLS port (6379) enabled, exposed to the public internet without Private Endpoints or VNet integration, weak access keys (Planned).
 
 # 🛡️ Security & Disclaimers
 
