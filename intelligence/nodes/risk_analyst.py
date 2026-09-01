@@ -24,22 +24,75 @@ def risk_analyst_node(state: dict) -> dict:
             }
         }
 
-    llm = ChatAnthropic(model=os.getenv("LLM_MODEL", "claude-haiku-4-5-20251001"), api_key=os.getenv("ANTHROPIC_API_KEY"), temperature=0.0,max_tokens=4096,max_retries=3,timeout=60)
+    indexed_findings = []
+    for idx, val in enumerate(findings, start=1):
+        item = dict(val)
+        item["finding_index"] = idx
+        indexed_findings.append(item)
+
+    llm = ChatAnthropic(
+        model=os.getenv("LLM_MODEL", "claude-haiku-4-5-20251001"),
+        api_key=os.getenv("ANTHROPIC_API_KEY"),
+        temperature=0.0,
+        max_tokens=8192,
+        max_retries=3,
+        timeout=120
+    )
 
     structured_llm = llm.with_structured_output(
         RiskAnalysisReport
     )
 
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", RISK_ANALYST_SYSTEM_PROMPT),
-            ("human", "Analyze the following Azure security findings payload:\n\n{findings_json}")
-        ]
-    )
+    batch_size = 8
+    all_enriched = []
+    exec_summary = ""
 
-    chain = prompt | structured_llm
-    report = cast(RiskAnalysisReport, chain.invoke({
-        "findings_json": json.dumps(findings, indent=2)
-    }))
+    for i in range(0, len(indexed_findings), batch_size):
+        chunk = indexed_findings[i : i + batch_size]
+        min_idx = chunk[0]["finding_index"]
+        max_idx = chunk[-1]["finding_index"]
 
-    return {"risk_report": report.model_dump()}
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    (
+                        f"{RISK_ANALYST_SYSTEM_PROMPT}\n\n"
+                        f"CRITICAL: Process findings with finding_index from {min_idx} to {max_idx}. "
+                        f"Preserve the EXACT `finding_index`, `check`, and `resource_name`."
+                    ),
+                ),
+                (
+                    "human",
+                    "Analyze the following Azure security findings payload:\n\n{findings_json}",
+                ),
+            ]
+        )
+
+        chain = prompt | structured_llm
+        report = cast(
+            RiskAnalysisReport,
+            chain.invoke(
+                {"findings_json": json.dumps(chunk, indent=2)}
+            ),
+        )
+
+        for local_idx, enriched_item in enumerate(report.findings):
+            expected_global_idx = chunk[local_idx]["finding_index"]
+            item_dict = enriched_item.model_dump()
+            if (
+                    item_dict.get("finding_index")
+                    != expected_global_idx
+            ):
+                item_dict["finding_index"] = expected_global_idx
+            all_enriched.append(item_dict)
+
+        if not exec_summary:
+            exec_summary = report.executive_summary
+
+    return {
+        "risk_report": {
+            "executive_summary": exec_summary,
+            "findings": all_enriched,
+        }
+    }
