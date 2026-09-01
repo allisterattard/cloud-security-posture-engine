@@ -24,25 +24,65 @@ def fix_generator_node(state: dict) -> dict:
     findings_json = json.dumps(findings, indent=2)
     risk_json = json.dumps(risk_report, indent=2)
 
-    llm = ChatAnthropic(model=os.getenv("LLM_MODEL", "claude-haiku-4-5-20251001"), api_key=os.getenv("ANTHROPIC_API_KEY"), temperature=0.0,max_tokens=4096,max_retries=3,timeout=60)
+    indexed_findings = []
+    for idx, val in enumerate(findings, start=1):
+        item = dict(val)
+        item["finding_index"] = idx
+        indexed_findings.append(item)
+
+    llm = ChatAnthropic(
+        model=os.getenv("LLM_MODEL", "claude-haiku-4-5-20251001"),
+        api_key=os.getenv("ANTHROPIC_API_KEY"),
+        temperature=0.0,
+        max_tokens=8192,
+        max_retries=3,
+        timeout=120
+    )
 
     structured_llm = llm.with_structured_output(
         RemediationPlan
     )
 
-    prompt = ChatPromptTemplate(
-        messages=[
-            SystemMessage(content=FIX_GENERATOR_SYSTEM_PROMPT),
-            HumanMessagePromptTemplate.from_template(
-                "Raw Findings:\n{findings_json}\n\nEnriched Risk Analysis:\n{risk_json}"
-            )
-        ]
-    )
+    batch_size = 6
+    all_remediations = []
 
-    chain = prompt | structured_llm
-    remediation_plan = cast(RemediationPlan, chain.invoke({
-        "findings_json": findings_json,
-        "risk_json": risk_json
-    }))
+    for i in range(0, len(indexed_findings), batch_size):
+        chunk = indexed_findings[i : i + batch_size]
+        min_idx = chunk[0]["finding_index"]
+        max_idx = chunk[-1]["finding_index"]
 
-    return {"remediation_plan": remediation_plan.model_dump()}
+        prompt = ChatPromptTemplate(
+            messages=[
+                SystemMessage(
+                    content=(
+                        f"{FIX_GENERATOR_SYSTEM_PROMPT}\n\n"
+                        f"CRITICAL: This batch contains findings with finding_index from {min_idx} to {max_idx}. "
+                        f"You MUST preserve and output the EXACT `finding_index`, `check`, and `resource_name` provided in each item. "
+                        f"Do NOT restart index counting from 1."
+                    )
+                ),
+                HumanMessagePromptTemplate.from_template(
+                    "Raw Findings Chunk:\n{findings_json}"
+                ),
+            ]
+        )
+
+        chain = prompt | structured_llm
+        remediation_plan = cast(
+            RemediationPlan,
+            chain.invoke({"findings_json": json.dumps(chunk, indent=2)}),
+        )
+
+        # Force correct global index mapping if LLM reset the index to 1..N
+        for local_idx, rem in enumerate(remediation_plan.remediations):
+            expected_global_idx = chunk[local_idx]["finding_index"]
+            rem_dict = rem.model_dump()
+            # If the LLM restarted count at 1, correct it to the global index
+            if (
+                    rem_dict.get("finding_index")
+                    != expected_global_idx
+            ):
+                rem_dict["finding_index"] = expected_global_idx
+            all_remediations.append(rem_dict)
+
+    return {"remediation_plan": {"remediations": all_remediations}}

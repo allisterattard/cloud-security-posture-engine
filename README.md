@@ -2,6 +2,8 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
+![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-orange)
+![Anthropic](https://img.shields.io/badge/LLM-Anthropic%20Claude-purple)
 
 An automated, LLM-powered cloud security auditing and remediation pipeline built with **Python**, **LangGraph**, **Anthropic Claude**, and the **Azure SDK**.
 
@@ -16,26 +18,58 @@ The engine deterministically discovers cloud misconfigurations across Azure subs
             │
             ▼  (Azure SDK - Deterministic Scanning)
 [ Discovery Scanners ]
-    ├── NSG Scanner (Exposed Management Ports: RDP, SSH)
-    └── Storage Account Scanner (Public Blob Access, Outdated TLS)
+    ├── 🌐 Network Security Groups (Management Ports: SSH, RDP, Port 9200)
+    ├── 🔑 Azure Key Vault (Purge Protection, Public Access, RBAC Auth)
+    ├── 🗄️ Storage Accounts & Containers (Public Blob Access, Container ACLs)
+    └── ⚡ Azure Cache for Redis (TLS 1.2+, Public Access, Entra ID Auth, Diagnostics)
             │
             ▼  (Structured Finding Payloads)
-[ LangGraph AI Engine ]
-    ├── 🧠 Risk Analyst Node (CVSS v3.1 Vector, Threat Path, Compliance)
-    └── 🛠️ Fix Generator Node (Azure CLI Scripts & Terraform HCL Blocks)
+[ LangGraph AI Engine (Batch-Aware & Token-Safe) ]
+    ├── 🧠 Risk Analyst Node (CVSS v3.1 Scoring, Threat Scenario, Business Impact)
+    │ └── Compliance Mapping: MCSB v1/v2, CIS Azure 1.4/2.0, NIST SP 800-53 Rev. 5
+    │
+    └── 🛠️ Fix Generator Node (Production-Grade Automated Remediation)
+    ├── Azure CLI Scripts & Rollback Procedures
+    ├── Terraform HCL (azurerm_* Provider Blocks)
+    └── Static Analysis Codes: Checkov IDs, Trivy IDs & IaC Suppressions
             │
-            ▼
+            ▼  (Deterministic Multi-Tier Join)
 [ Enterprise SOC Markdown Report ]
 ```
 ---
 
 ## ✨ Features
 
-- **Deterministic Discovery:** Scans Network Security Groups and Azure Storage Accounts for perimeter and data protection vulnerabilities.
-- **Contextual Threat Analysis:** Analyzes exploit feasibility, attacker pivot potential, and business blast radius.
-- **Standards & Compliance Mapping:** Maps findings to CIS Microsoft Azure Foundations Benchmark (v1.4.0) and NIST SP 800-53 Rev. 5 controls.
-- **Dual-Track Remediation:** Generates instant bash-executable Azure CLI remediation commands alongside declarative `azurerm_*` Terraform HCL snippets.
-- **Safe Rollback Procedures:** Includes reversal commands for every fix to prevent unintended service disruption.
+- **Deterministic Discovery:** Read-only inspection using official Azure SDKs (`azure-mgmt-network`, `azure-mgmt-storage`, `azure-mgmt-keyvault`, `azure-mgmt-redis`, `azure-mgmt-resource`) with zero LLM hallucination during scanning.
+- **Batch-Aware AI Pipeline:** Chunked node invocations (`batch_size = 6-8`) prevent output token truncation when handling dozens of findings across large cloud environments.
+- **Standards & Benchmark Mapping:** Correlates every vulnerability with **Microsoft Cloud Security Benchmark (MCSB)** controls (`NS-1`, `DP-3`, `IM-1`, `LT-1`), CIS Azure Foundations Benchmarks, and NIST SP 800-53 controls.
+- **Dual-Track Remediation:** Delivers bash-executable Azure CLI commands alongside declarative `azurerm_*` Terraform HCL blocks with built-in rollback commands.
+- **DevSecOps & IaC Tooling Integration:** Emits official **Checkov** (`CKV_AZURE_*`) and **Trivy** (`AVD-AZU-*`) policy IDs with copy-paste HCL exception suppression comments.
+
+## 📋 Audit Check Coverage
+
+| Service Module | Check ID | Audit Rule Description | Severity |
+| :--- | :--- | :--- | :--- |
+| **Key Vault** | `AZ-KV-001` | Soft delete is disabled on Key Vault | `HIGH` |
+| **Key Vault** | `AZ-KV-002` | Purge protection is disabled (vulnerable to permanent deletion) | `HIGH` |
+| **Key Vault** | `AZ-KV-003` | Key Vault allows public network access instead of Private Endpoints | `HIGH` |
+| **Key Vault** | `AZ-KV-004` | Key Vault firewall default action is set to `Allow` instead of `Deny` | `MEDIUM` |
+| **Key Vault** | `AZ-KV-005` | Legacy Access Policies in use instead of Azure RBAC authorization | `MEDIUM` |
+| **Network (NSG)** | `AZ-NSG-001` | Inbound RDP (`3389`) allowed from public source `*` / `0.0.0.0/0` | `CRITICAL` |
+| **Network (NSG)** | `AZ-NSG-002` | Inbound SSH (`22`) allowed from public source `*` / `0.0.0.0/0` | `CRITICAL` |
+| **Network (NSG)** | `AZ-NSG-003` | Inbound wildcard / ALL ports (`*`) unrestricted from public source | `CRITICAL` |
+| **Network (NSG)** | `AZ-NSG-004` | Inbound custom ports (e.g., Elasticsearch `9200`) exposed to public Internet | `HIGH` |
+| **Redis** | `AZ-REDIS-001` | Non-SSL unencrypted port (`6379`) enabled | `HIGH` |
+| **Redis** | `AZ-REDIS-002` | Deprecated TLS protocol versions allowed (`< TLS 1.2`) | `HIGH` |
+| **Redis** | `AZ-REDIS-003` | Public network access enabled allowing inbound Internet traffic | `HIGH` |
+| **Redis** | `AZ-REDIS-004` | Redis instance lacks Private Endpoint and VNet subnet injection | `HIGH` |
+| **Redis** | `AZ-REDIS-005` | Microsoft Entra ID (AAD) authentication disabled (using shared keys) | `MEDIUM` |
+| **Redis** | `AZ-REDIS-006` | Premium Redis instance missing RDB/AOF data persistence | `MEDIUM` |
+| **Redis** | `AZ-REDIS-007` | Azure Monitor diagnostic logs/metrics not configured with valid sink | `LOW` |
+| **Storage Account** | `AZ-STR-001` | Storage account accessible from all public networks | `CRITICAL` |
+| **Storage Account** | `AZ-STR-002` | Anonymous public blob access permitted at storage account level | `CRITICAL` / `HIGH` |
+| **Storage Account** | `AZ-STR-003` | Outdated TLS version enforced (`< TLS 1.2`) | `MEDIUM` |
+| **Storage Account** | `AZ-STR-004` | Storage blob container has anonymous read access actively enabled | `CRITICAL` |
 
 ---
 
@@ -103,48 +137,64 @@ The assessment report will be saved to azure_security_report.md.
 ## 📊 Sample Report Output
 
 ``` markdown
-### Finding #1: [AZ-NSG-001] westeurope-business-vm-nsg (CRITICAL)
-- **Service:** `NSG`
-- **Resource ID:** `/subscriptions/.../networkSecurityGroups/westeurope-vm-nsg`
-- **Identified Issue:** Inbound RDP (3389) allowed from public source *.
-- **Current Config:** `rule=RDP, priority=300, ports=3389`
-- **CVSS v3.1 Score:** **9.8** (`CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H`)
-- **Compliance Controls:** CIS Azure 1.4.0 6.1, NIST SP 800-53 AC-4
+### Finding #1: [AZ-REDIS-003] platform-redis (HIGH)
+- **Service:** `Azure Cache for Redis`
+- **Resource ID:** `/subscriptions/.../providers/Microsoft.Cache/Redis/platform-redis`
+- **Identified Issue:** Azure Cache for Redis instance has public network access enabled.
+- **Current Config:** `public_network_access=Enabled`
+- **CVSS v3.1 Score:** **8.6** (`CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:L`)
+- **Microsoft Cloud Security Benchmark (MCSB):** `NS-1` (Network Security)
+- **Additional Compliance:** CIS Azure 1.4.1, NIST SP 800-53 Rev. 5 SC-7, PCI-DSS 1.3
+- **Static Analysis IDs:** Checkov: `CKV_AZURE_31` | Trivy: `AVD-AZU-0047`
 
-#### 🛠️ Remediation Instructions
+#### ⚔️ Threat Vector & Impact
+**Attack Scenario:** An unauthenticated attacker discovers the public endpoint on port 6379, attempts credential brute-forcing, and directly targets the Redis instance without traversing firewalls.
+
+**Business Impact:** Unauthorized access to cached user tokens, API keys, and session state, leading to potential cache poisoning, session hijacking, and regulatory fines under GDPR / PCI-DSS.
+
+#### 🛠️ Remediation & IaC Code
 **Azure CLI Command (Bash):**
-az network nsg rule update --resource-group VM-Tools --nsg-name westeurope-vm-nsg --name RDP --access Deny
+
+az redis update --name platform-redis --resource-group ztg_rcg_storage --public-network-access-enabled false
+
 
 **Terraform HCL Fix:**
-resource "azurerm_network_security_rule" "rdp" {
-  name                        = "RDP"
-  priority                    = 300
-  direction                   = "Inbound"
-  access                      = "Deny"
-  protocol                    = "Tcp"
-  source_port_range           = "*"
-  destination_port_range      = "3389"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = "VM-Tools"
-  network_security_group_name = "westeurope-vm-nsg"
+resource "azurerm_redis_cache" "platform_redis" {
+  name                          = "platform-redis"
+  location                      = "westeurope"
+  resource_group_name           = "ztg_rcg_storage"
+  capacity                      = 2
+  family                        = "C"
+  sku_name                      = "Standard"
+  enable_non_ssl_port           = false
+  minimum_tls_version           = "1.2"
+  public_network_access_enabled = false
 }
+
+#### IaC Policy Exception / Suppression Syntax:
+
+# checkov:skip=CKV_AZURE_31:Disabling public network access for Redis cache
+# trivy:ignore:AVD-AZU-0047:Approved network isolation via Private Endpoint
+
+#### Rollback Procedure:
+
+az redis update --name platform-redis --resource-group ztg_rcg_storage --public-network-access-enabled true
 ```
 
 ## 🔌 Modular Plugin Architecture
 
-All scanners implement a uniform contract returning standardized finding dictionaries:
+All discovery scanners implement a uniform contract returning standardized, JSON-serializable finding payloads:
 
-``` python
+```python
 {
-    "check": "AZ-STR-002",
-    "service": "StorageAccount",
-    "resource_name": "<account_name>",
-    "resource_id": "<arm_resource_id>",
-    "resource_group": "<rg_name>",
+    "check": "AZ-REDIS-003",
+    "service": "Azure Cache for Redis",
+    "resource_name": "platform-redis",
+    "resource_id": "/subscriptions/.../providers/Microsoft.Cache/Redis/platform-redis",
+    "resource_group": "ztg_rcg_storage",
     "severity": "HIGH",
-    "issue": "Anonymous public blob access is permitted.",
-    "current_config": "allowBlobPublicAccess=True, publicNetworkAccess=Enabled"
+    "issue": "Azure Cache for Redis instance has public network access enabled.",
+    "current_config": "public_network_access=Enabled"
 }
 ```
 
@@ -152,9 +202,9 @@ All scanners implement a uniform contract returning standardized finding diction
 - [x] Network Security Groups: Inbound internet access (0.0.0.0/0 or *) on management ports (RDP 3389, SSH 22), overly broad subnet rules.
 - [x] Storage Accounts: Public blob access enabled, missing "Require Secure Transfer" (HTTPS), legacy TLS version (<1.2), soft-delete disabled, missing Private Endpoints.
 - [x] Key Vaults: Soft-delete / purge protection disabled, public network access enabled, using Vault Access Policies instead of Azure RBAC, unrotated secrets.
-- [ ] Azure Cache for Redis: Non-TLS port (6379) enabled, exposed to the public internet without Private Endpoints or VNet integration, weak access keys (In Progress).
-- [ ] Azure SQL (MSSQL PaaS): Public IP exposure, missing Azure AD (Entra) authentication-only mode, Auditing / Defender for SQL turned off, unencrypted data in transit (enforce TLS) (Planned).
-- [ ] Azure Firewall / Load Balancers: Missing WAF integration on App Gateways/Front Door, standard public LBs exposing).ng backends without outbound NAT rules or NSG filtering (Planned).
+- [x] Azure Cache for Redis: Non-TLS port (6379) enabled, exposed to the public internet without Private Endpoints or VNet integration, weak access keys.
+- [ ] Azure SQL (MSSQL PaaS): Public IP exposure, missing Azure AD (Entra) authentication-only mode, Auditing / Defender for SQL turned off, unencrypted data in transit (enforce TLS) (In Progress).
+- [ ] Azure Firewall / Load Balancers: Missing WAF integration on App Gateways/Front Door, standard public LBs exposing backends without outbound NAT rules or NSG filtering (Planned).
 - [ ] Azure Kubernetes Service (AKS): Public API server endpoint exposed, missing Entra ID RBAC integration, non-system pods running as root, missing Azure Policy/OPA constraint enforcement (Planned).
 
 # 🛡️ Security & Disclaimers
