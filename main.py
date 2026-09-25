@@ -4,7 +4,7 @@ import config
 from intelligence import create_security_graph
 from core.reporter import generate_soc_markdown_report
 from dotenv import load_dotenv
-from azure.identity import ClientSecretCredential
+from azure.identity import ClientSecretCredential, AzureCliCredential
 import os
 
 load_dotenv()
